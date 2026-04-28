@@ -4,11 +4,12 @@ services:
     container_name: token-ingester
     restart: unless-stopped
     environment:
+      TZ: ${TZ:-UTC}
       CLAUDE_PROJECTS_DIR: /claude-projects
       DB_PATH: /data/tokens.db
-      INTERVAL_SECONDS: 300
+      INTERVAL_SECONDS: ${INTERVAL_SECONDS:-300}
     volumes:
-      - ${HOME}/.claude/projects:/claude-projects:ro
+      - ${CLAUDE_PROJECTS_DIR:-${HOME}/.claude/projects}:/claude-projects:ro
       - tokens-db:/data
 
   grafana:
@@ -16,8 +17,9 @@ services:
     container_name: token-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     environment:
+      TZ: ${TZ:-UTC}
       GF_INSTALL_PLUGINS: frser-sqlite-datasource
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin

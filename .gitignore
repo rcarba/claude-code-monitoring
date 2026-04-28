@@ -3,3 +3,5 @@ data/
 *.db-journal
 *.db-wal
 *.db-shm
+.env
+__pycache__/

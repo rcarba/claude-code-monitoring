@@ -191,13 +191,21 @@ def run_once(conn: sqlite3.Connection) -> tuple[int, int]:
 
 
 def main() -> int:
-    if not PROJECTS_DIR.exists():
-        print(f"[ingest] projects dir not found: {PROJECTS_DIR}", file=sys.stderr)
-        return 1
     conn = open_db(DB_PATH)
     one_shot = "--once" in sys.argv
 
     while True:
+        if not PROJECTS_DIR.exists():
+            print(
+                f"[ingest] projects dir not found: {PROJECTS_DIR} — "
+                f"will retry. Run Claude Code at least once to create it.",
+                flush=True,
+            )
+            if one_shot:
+                return 1
+            time.sleep(INTERVAL)
+            continue
+
         start = time.time()
         files_n, rows_n = run_once(conn)
         elapsed = time.time() - start
