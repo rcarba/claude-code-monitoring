@@ -20,7 +20,7 @@ services:
       - "${GRAFANA_PORT:-3000}:3000"
     environment:
       TZ: ${TZ:-UTC}
-      GF_INSTALL_PLUGINS: frser-sqlite-datasource
+      GF_INSTALL_PLUGINS: frser-sqlite-datasource,marcusolsson-hourly-heatmap-panel
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
