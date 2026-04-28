@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: tokens
+    type: frser-sqlite-datasource
+    uid: tokens-sqlite
+    access: proxy
+    isDefault: true
+    jsonData:
+      path: /var/lib/tokens-db/tokens.db
+    editable: true
