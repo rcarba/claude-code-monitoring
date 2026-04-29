@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS blocks (
     burn_cost_per_hour       REAL,
     projected_total_cost     REAL,
     projected_remaining_min  INTEGER,
+    token_limit              INTEGER,
+    projected_percent_used   REAL,
+    limit_status             TEXT,
     updated_at               INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_active ON blocks(is_active);
@@ -91,7 +94,22 @@ def open_db(path: Path) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA synchronous=NORMAL")
+    _migrate_blocks(conn)
     return conn
+
+
+def _migrate_blocks(conn: sqlite3.Connection) -> None:
+    """Add columns to the blocks table if missing (idempotent)."""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(blocks)")}
+    additions = [
+        ("token_limit",            "INTEGER"),
+        ("projected_percent_used", "REAL"),
+        ("limit_status",           "TEXT"),
+    ]
+    for name, typ in additions:
+        if name not in existing:
+            conn.execute(f"ALTER TABLE blocks ADD COLUMN {name} {typ}")
+    conn.commit()
 
 
 def parse_line(raw: str, project: str, source: str) -> dict | None:
@@ -227,7 +245,7 @@ def _iso_to_epoch(s: str | None) -> int | None:
 def fetch_ccusage_blocks() -> list[dict]:
     try:
         r = subprocess.run(
-            ["ccusage", "blocks", "--json"],
+            ["ccusage", "blocks", "--json", "--token-limit", "max"],
             capture_output=True, text=True, timeout=120, check=True,
         )
     except (subprocess.SubprocessError, FileNotFoundError) as e:
@@ -245,12 +263,14 @@ INSERT OR REPLACE INTO blocks (
     id, start_ts, end_ts, actual_end_ts, is_active, is_gap, entries,
     input_tokens, output_tokens, cache_create, cache_read, total_tokens,
     cost_usd, models, burn_tokens_per_min, burn_cost_per_hour,
-    projected_total_cost, projected_remaining_min, updated_at
+    projected_total_cost, projected_remaining_min,
+    token_limit, projected_percent_used, limit_status, updated_at
 ) VALUES (
     :id, :start_ts, :end_ts, :actual_end_ts, :is_active, :is_gap, :entries,
     :input_tokens, :output_tokens, :cache_create, :cache_read, :total_tokens,
     :cost_usd, :models, :burn_tokens_per_min, :burn_cost_per_hour,
-    :projected_total_cost, :projected_remaining_min, strftime('%s','now')
+    :projected_total_cost, :projected_remaining_min,
+    :token_limit, :projected_percent_used, :limit_status, strftime('%s','now')
 )
 """
 
@@ -261,6 +281,7 @@ def store_blocks(conn: sqlite3.Connection, blocks: list[dict]) -> int:
         tc = b.get("tokenCounts") or {}
         br = b.get("burnRate") or {}
         pj = b.get("projection") or {}
+        ls = b.get("tokenLimitStatus") or {}
         rows.append({
             "id":            b.get("id"),
             "start_ts":      _iso_to_epoch(b.get("startTime")),
@@ -280,6 +301,9 @@ def store_blocks(conn: sqlite3.Connection, blocks: list[dict]) -> int:
             "burn_cost_per_hour":      br.get("costPerHour"),
             "projected_total_cost":    pj.get("totalCost"),
             "projected_remaining_min": pj.get("remainingMinutes"),
+            "token_limit":             ls.get("limit"),
+            "projected_percent_used":  ls.get("percentUsed"),
+            "limit_status":            ls.get("status"),
         })
     if not rows:
         return 0
